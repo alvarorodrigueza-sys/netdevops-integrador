@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NetDevOps Control Center</title>
+<style>
+:root{--bg:#0b1020;--panel:#121a2c;--panel2:#182238;--text:#e8eefc;--muted:#93a4c7;--line:#26334f;--ok:#2ecc71;--warn:#f39c12;--bad:#e74c3c;--accent:#5aa9ff}
+*{box-sizing:border-box} body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:linear-gradient(180deg,#09111f,#0d1527);color:var(--text)}
+.container{max-width:1500px;margin:auto;padding:24px} h1{margin:0 0 4px}.subtitle{color:var(--muted);margin-bottom:22px}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.card,.panel{background:rgba(18,26,44,.94);border:1px solid var(--line);border-radius:14px}.card{padding:18px}.card-label{color:var(--muted);font-size:13px}.card-value{font-size:28px;font-weight:700;margin-top:5px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabbtn,.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 16px;border-radius:9px;cursor:pointer}.tabbtn.active{border-color:var(--accent)}.btn.primary{background:#184a78}.btn.ok{background:#1e5a3b}.btn.danger{background:#6d2424}
+.tab{display:none}.tab.active{display:block}.panel{padding:18px;margin-bottom:16px}.table-wrap{overflow:auto;max-height:520px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}th{position:sticky;top:0;background:var(--panel)}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px}.up{color:#8ff0b3}.down{color:#ff9c94}.warn{color:#ffc66d}
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:14px}.field{display:flex;flex-direction:column;gap:5px}.field span,.small{font-size:12px;color:var(--muted)}
+select,input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 10px}input{min-width:220px}
+canvas{width:100%;height:280px;background:#0c1424;border:1px solid var(--line);border-radius:10px}
+.notice{padding:12px;border-radius:9px;border:1px solid var(--line);margin-bottom:14px}.safe{background:#102a20;border-color:#305b45}.warning{background:#2a2410;border-color:#80662d}
+pre{white-space:pre-wrap;background:#070b13;border:1px solid var(--line);padding:14px;border-radius:10px;max-height:560px;overflow:auto;font-family:Consolas,monospace;font-size:12px}
+.service-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.service{padding:14px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}
+@media(max-width:900px){.cards,.service-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:520px){.cards,.service-grid{grid-template-columns:1fr}}
+</style></head>
+<body><div class="container">
+<h1>NetDevOps Control Center</h1>
+<div class="subtitle">NETCONF/YANG · REST API · Ansible · Telemetría · Control auditado</div>
+<div class="cards">
+<div class="card"><div class="card-label">Dispositivos online</div><div id="c-devices" class="card-value">-</div></div>
+<div class="card"><div class="card-label">Interfaces UP</div><div id="c-ifaces" class="card-value">-</div></div>
+<div class="card"><div class="card-label">Utilización máxima</div><div id="c-util" class="card-value">-</div></div>
+<div class="card"><div class="card-label">Alertas activas</div><div id="c-alerts" class="card-value">-</div></div>
+</div>
+<div class="tabs">
+<button class="tabbtn active" data-tab="summary">Resumen</button><button class="tabbtn" data-tab="interfaces">Interfaces</button><button class="tabbtn" data-tab="telemetry">Telemetría</button><button class="tabbtn" data-tab="alerts">Alertas</button><button class="tabbtn" data-tab="automation">Ansible</button><button class="tabbtn" data-tab="servers">Servidores</button><button class="tabbtn" data-tab="mitigation">Mitigación</button><button class="tabbtn" data-tab="audit">Auditoría</button>
+</div>
+
+<div id="summary" class="tab active"><div class="panel"><h2>Estado de dispositivos</h2><div class="table-wrap"><table id="tbl-devices"></table></div></div><div class="panel"><h2>Utilización actual</h2><div class="table-wrap"><table id="tbl-current"></table></div></div></div>
+<div id="interfaces" class="tab"><div class="panel"><h2>Interfaces monitoreadas</h2><div class="table-wrap"><table id="tbl-interfaces"></table></div></div></div>
+<div id="telemetry" class="tab"><div class="panel"><h2>Histórico</h2><div class="controls"><label class="field"><span>Dispositivo</span><select id="sel-device"></select></label><label class="field"><span>Interfaz</span><select id="sel-interface"></select></label></div><div id="tele-meta" class="small"></div><h3>Utilización (%)</h3><canvas id="chart-util" width="1200" height="280"></canvas><h3>Tráfico (bps)</h3><canvas id="chart-traffic" width="1200" height="280"></canvas></div></div>
+<div id="alerts" class="tab"><div class="panel"><h2>Alertas registradas</h2><div class="table-wrap"><table id="tbl-alerts"></table></div></div></div>
+
+<div id="automation" class="tab">
+<div class="panel"><h2>Orquestación Ansible</h2><div class="notice safe">Todo se ejecuta desde aquí. La contraseña de Vault se usa solo para esa ejecución y no se almacena.</div>
+<div class="controls"><label class="field"><span>Operador</span><input id="ans-user" value="alvar"></label><label class="field"><span>Vault password</span><input id="ans-vault" type="password"></label></div>
+<div class="service-grid">
+<div class="service"><b>WEB</b><p class="small">NGINX</p><button class="btn primary" onclick="runAutomation('deploy_web')">Desplegar WEB</button></div>
+<div class="service"><b>FTP</b><p class="small">VSFTPD</p><button class="btn primary" onclick="runAutomation('deploy_ftp')">Desplegar FTP</button></div>
+<div class="service"><b>MAIL</b><p class="small">Postfix + Dovecot</p><button class="btn primary" onclick="runAutomation('deploy_mail')">Desplegar MAIL</button></div>
+<div class="service"><b>DNS</b><p class="small">BIND9</p><button class="btn primary" onclick="runAutomation('deploy_dns')">Desplegar DNS</button></div>
+</div>
+<div class="controls" style="margin-top:14px"><button class="btn ok" onclick="runAutomation('deploy_all')">Desplegar TODO</button><button class="btn" onclick="runAutomation('verify_all')">Verificar servicios</button></div></div>
+<div class="panel"><h2>Ejecuciones</h2><div class="table-wrap"><table id="tbl-runs"></table></div></div>
+<div class="panel"><h2>Log</h2><div id="log-meta" class="small">Selecciona una ejecución.</div><pre id="ans-log">Sin log seleccionado.</pre></div>
+</div>
+
+
+<div id="servers" class="tab">
+  <div class="panel">
+    <h2>Servidores Linux administrados por Ansible</h2>
+    <div class="notice safe">Estado de red actualizado automáticamente. Verificación, logs y reinicio se ejecutan desde el dashboard mediante Ansible.</div>
+    <div class="controls">
+      <label class="field"><span>Operador</span><input id="srv-user" value="alvar"></label>
+      <label class="field"><span>Ansible Vault password</span><input id="srv-vault" type="password" autocomplete="off"></label>
+      <button class="btn" onclick="loadServerStatus()">Actualizar estados</button>
+    </div>
+    <div id="server-cards" class="service-grid"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Historial de administración</h2>
+    <div class="table-wrap"><table id="tbl-server-runs"></table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Salida / logs</h2>
+    <div id="srv-log-meta" class="small">Selecciona una acción.</div>
+    <pre id="srv-log">Sin salida seleccionada.</pre>
+  </div>
+</div>
+
+
+<div id="mitigation" class="tab">
+  <div class="panel">
+    <h2>Mitigación automática &gt;70%</h2>
+    <div id="live-banner" class="notice warning"></div>
+    <p class="small">
+      El watcher evalúa cada 5 segundos únicamente el puerto autorizado.
+      En DRY-RUN registra el incidente sin modificar el switch.
+    </p>
+
+    <div class="controls">
+      <label class="field"><span>Switch</span><select id="mit-device"></select></label>
+      <label class="field"><span>Puerto autorizado</span><select id="mit-interface"></select></label>
+      <label class="field"><span>Usuario autorizador</span><input id="mit-user" value="alvar"></label>
+    </div>
+
+    <div class="controls">
+      <button class="btn primary" onclick="authorizeDemo()">Autorizar y armar</button>
+      <button class="btn" onclick="simulateThreshold()">Probar lógica con 80% simulado</button>
+      <button class="btn danger" onclick="disarmDemo()">Desarmar</button>
+    </div>
+
+    <div id="auth-state" class="small"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Incidentes</h2>
+    <div class="table-wrap"><table id="tbl-incidents"></table></div>
+  </div>
+</div>
+
+<div id="audit" class="tab"><div class="panel"><h2>Auditoría de mitigación y recuperación</h2><div class="table-wrap"><table id="tbl-mitigation"></table></div></div></div>
+<div class="small">Actualización cada 5 s · SQLite: netdevops.db</div>
+</div>
+
+<script>
+let state=null,selectedRunId=null,selectedServiceRunId=null;
+function esc(v){if(v===null||v===undefined)return "-";return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+function fmtTime(e){return e?new Date(e*1000).toLocaleString():"-"}
+function fmtUptime(v){
+  v=Number(v||0);
+  if(!v)return "-";
+  const d=Math.floor(v/86400);
+  const h=Math.floor((v%86400)/3600);
+  const m=Math.floor((v%3600)/60);
+  return `${d}d ${h}h ${m}m`;
+}
+function fmtRate(v){v=Number(v||0);let u=["bps","Kbps","Mbps","Gbps"],i=0;while(v>=1000&&i<u.length-1){v/=1000;i++}return v.toFixed(2)+" "+u[i]}
+function fmtBytes(v){v=Number(v||0);let u=["B","KB","MB","GB"],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++}return v.toFixed(2)+" "+u[i]}
+function table(el,cols,rows){el.innerHTML="<thead><tr>"+cols.map(c=>`<th>${esc(c[1])}</th>`).join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+cols.map(c=>`<td>${c[2]?c[2](r[c[0]],r):esc(r[c[0]])}</td>`).join("")+"</tr>").join("")+"</tbody>"}
+function badge(v){let c=(v==="online"||v==="up"||v==="success")?"up":(v==="offline"||v==="down"||v==="failed")?"down":"warn";return `<span class="badge ${c}">${esc(v)}</span>`}
+async function postJson(url,data){let r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data||{})});let j=await r.json();if(!r.ok)throw new Error(j.error||"Error");return j}
+
+function selectors(){
+ let d=document.getElementById("sel-device"),i=document.getElementById("sel-interface"),od=d.value,oi=i.value,ds=[...new Set(state.interfaces.map(x=>x.device))].sort();
+ d.innerHTML=ds.map(x=>`<option>${esc(x)}</option>`).join("");if(ds.includes(od))d.value=od;let is=state.interfaces.filter(x=>x.device===d.value).map(x=>x.interface).sort();i.innerHTML=is.map(x=>`<option>${esc(x)}</option>`).join("");if(is.includes(oi))i.value=oi;
+}
+function mitSelectors(){
+ let d=document.getElementById("mit-device"),i=document.getElementById("mit-interface"),od=d.value,oi=i.value,ds=["cisco01","cisco02"].filter(x=>state.interfaces.some(y=>y.device===x));
+ d.innerHTML=ds.map(x=>`<option>${x}</option>`).join("");if(ds.includes(od))d.value=od;let is=state.interfaces.filter(x=>x.device===d.value).map(x=>x.interface).sort();i.innerHTML=is.map(x=>`<option>${esc(x)}</option>`).join("");if(is.includes(oi))i.value=oi;
+ let a=state.authorization;document.getElementById("auth-state").textContent=a?`Autorización: ${a.device} ${a.interface} · ${a.authorized_by} · ${Number(a.armed)?"ARMADO":"DESARMADO"}`:"Sin puerto autorizado.";
+ document.getElementById("live-banner").textContent=state.live_writes_enabled
+   ? `MODO LIVE habilitado. Target adicional: ${state.live_target.device||"-"} ${state.live_target.interface||"-"}`
+   : "MODO SEGURO / DRY-RUN: el sistema detecta, crea incidentes y audita, pero NO ejecuta shutdown/no shutdown real.";
+}
+async function loadState(){
+ let r=await fetch("/api/state");state=await r.json();let on=state.devices.filter(x=>x.status==="online").length,up=state.interfaces.filter(x=>x.oper_status==="up").length,max=Math.max(0,...state.latest.map(x=>Number(x.utilization_pct||0))),al=state.alerts.filter(x=>x.status==="detected").length;
+ document.getElementById("c-devices").textContent=`${on}/${state.devices.length||3}`;document.getElementById("c-ifaces").textContent=up;document.getElementById("c-util").textContent=max.toFixed(4)+"%";document.getElementById("c-alerts").textContent=al;
+ table(document.getElementById("tbl-devices"),[
+   ["device","Dispositivo"],
+   ["hostname","Hostname"],
+   ["vendor","Vendor"],
+   ["host","IP"],
+   ["model","Modelo"],
+   ["version","Versión"],
+   ["uptime_seconds","Uptime",v=>fmtUptime(v)],
+   ["boot_time","Boot time"],
+   ["status","Estado",badge],
+   ["last_seen","Última lectura",v=>fmtTime(v)]
+ ],state.devices);
+ let cur=state.latest.map(x=>({...x,traffic_fmt:fmtRate(x.traffic_bps),util_fmt:Number(x.utilization_pct||0).toFixed(4)+"%"}));table(document.getElementById("tbl-current"),[["device","Dispositivo"],["hostname","Hostname"],["interface","Interfaz"],["traffic_fmt","Tráfico"],["util_fmt","Utilización"],["threshold_exceeded",">70%",v=>v?'<span class="badge down">SÍ</span>':'<span class="badge up">No</span>']],cur);
+ let ir=state.interfaces.map(x=>({...x,speed_fmt:fmtRate(x.speed_bps),rx_fmt:fmtBytes(x.rx_bytes),tx_fmt:fmtBytes(x.tx_bytes)}));table(document.getElementById("tbl-interfaces"),[["device","Dispositivo"],["interface","Interfaz"],["admin_status","Admin",badge],["oper_status","Oper",badge],["speed_fmt","Velocidad"],["phys_address","MAC"],["ip_address","IP"],["rx_fmt","RX"],["tx_fmt","TX"]],ir);
+ table(document.getElementById("tbl-alerts"),[["opened_at","Inicio",v=>fmtTime(v)],["device","Dispositivo"],["interface","Interfaz"],["utilization_pct","Utilización",v=>Number(v||0).toFixed(4)+"%"],["threshold_pct","Umbral",v=>Number(v||0).toFixed(0)+"%"],["status","Estado"],["action","Acción"]],state.alerts);
+ table(document.getElementById("tbl-runs"),[["id","ID",v=>`<button class="btn" onclick="showRun(${Number(v)})">#${Number(v)}</button>`],["started_at","Inicio",v=>fmtTime(v)],["label","Acción"],["target","Target"],["initiated_by","Operador"],["status","Estado",badge],["return_code","RC"]],state.automation_runs);
+ table(document.getElementById("tbl-mitigation"),[["timestamp","Fecha/Hora"],["device","Dispositivo"],["interface","Interfaz"],["action","Acción"],["authorized_by","Autorizado por"],["reason","Motivo"],["result","Resultado"]],state.mitigation_actions);
+ const incidents=(state.mitigation_incidents||[]).map(x=>({
+   ...x,
+   util_fmt:Number(x.utilization_pct||0).toFixed(2)+"%",
+   action_html:(x.status==="MITIGATED"||x.status==="DRY_RUN_MITIGATED")
+     ? `<button class="btn ok" onclick="recoverIncident(${Number(x.id)})">Recuperar</button>`
+     : `<span class="badge up">${esc(x.status)}</span>`
+ }));
+ table(document.getElementById("tbl-incidents"),[
+   ["id","ID",v=>"#"+esc(v)],
+   ["opened_at","Detectado"],
+   ["device","Switch"],
+   ["interface","Interfaz"],
+   ["util_fmt","Utilización"],
+   ["mode","Modo"],
+   ["status","Estado",v=>badge(v)],
+   ["authorized_by","Autorizado por"],
+   ["mitigation_result","Mitigación"],
+   ["action_html","Acción",v=>v]
+ ],incidents);
+ selectors();mitSelectors();updateServerRuns();await loadHistory();await loadServerStatus();if(selectedRunId)await refreshRun(selectedRunId);if(selectedServiceRunId)await refreshServiceRun(selectedServiceRunId);
+}
+async function runAutomation(action){let p=document.getElementById("ans-vault").value,u=document.getElementById("ans-user").value;if(!p){alert("Ingresa el Vault password.");return}try{let j=await postJson("/api/automation/run",{action,vault_password:p,initiated_by:u});selectedRunId=j.run_id;document.getElementById("ans-vault").value="";await showRun(j.run_id)}catch(e){alert(e.message)}}
+async function showRun(id){selectedRunId=id;await refreshRun(id)} async function refreshRun(id){let r=await fetch(`/api/automation/run/${id}`);if(!r.ok)return;let j=await r.json();document.getElementById("log-meta").textContent=`Run #${j.id} · ${j.label} · ${j.status} · RC ${j.return_code??"-"}`;document.getElementById("ans-log").textContent=j.log_text||"Esperando salida..."}
+async function authorizeDemo(){try{let j=await postJson("/api/mitigation/authorize",{device:document.getElementById("mit-device").value,interface:document.getElementById("mit-interface").value,authorized_by:document.getElementById("mit-user").value});alert(j.message);await loadState()}catch(e){alert(e.message)}}
+async function simulateThreshold(){
+  try{
+    let j=await postJson("/api/mitigation/simulate",{});
+    alert(j.message);
+    await loadState();
+  }catch(e){alert(e.message)}
+}
+
+async function recoverIncident(id){
+  const user=document.getElementById("mit-user").value;
+  if(!confirm(`¿Recuperar el incidente #${id}?`)) return;
+  try{
+    let j=await postJson("/api/mitigation/recover",{
+      incident_id:id,
+      authorized_by:user
+    });
+    alert(j.message);
+    await loadState();
+  }catch(e){alert(e.message)}
+}
+
+async function disarmDemo(){
+  await postJson("/api/mitigation/disarm",{});
+  await loadState();
+}
+
+async function loadServerStatus(){
+  const r=await fetch("/api/servers/status");
+  const rows=await r.json();
+  const el=document.getElementById("server-cards");
+  el.innerHTML=rows.map(s=>{
+    const ports=Object.entries(s.ports).map(([p,ok])=>`<span class="badge ${ok?'up':'down'}">TCP/${esc(p)} ${ok?'UP':'DOWN'}</span>`).join(" ");
+    return `<div class="service">
+      <b>${esc(s.label)}</b>
+      <p class="small">${esc(s.host)} · ${esc(s.ip||"sin IP")}</p>
+      <p>${s.healthy?'<span class="badge up">OPERATIVO</span>':'<span class="badge down">REVISAR</span>'}</p>
+      <p>${ports}</p>
+      <div class="controls">
+        <button class="btn" onclick="serverVerify('${s.key}')">Verificar</button>
+        <button class="btn primary" onclick="serverOperation('${s.key}','logs')">Ver logs</button>
+        <button class="btn danger" onclick="serverRestart('${s.key}')">Reiniciar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function serverCredentials(){
+  return {
+    user:document.getElementById("srv-user").value,
+    vault:document.getElementById("srv-vault").value
+  };
+}
+
+async function serverVerify(group){
+  const c=serverCredentials();
+  if(!c.vault){alert("Ingresa el Vault password.");return;}
+  try{
+    const j=await postJson("/api/automation/run",{
+      action:"verify_"+group,
+      vault_password:c.vault,
+      initiated_by:c.user
+    });
+    selectedServiceRunId=j.run_id;
+    await refreshServiceRun(j.run_id);
+  }catch(e){alert(e.message);}
+}
+
+async function serverOperation(group,operation){
+  const c=serverCredentials();
+  if(!c.vault){alert("Ingresa el Vault password.");return;}
+  try{
+    const j=await postJson("/api/service/run",{
+      group:group,
+      operation:operation,
+      vault_password:c.vault,
+      initiated_by:c.user
+    });
+    selectedServiceRunId=j.run_id;
+    await refreshServiceRun(j.run_id);
+  }catch(e){alert(e.message);}
+}
+
+async function serverRestart(group){
+  if(!confirm("¿Reiniciar este servicio? La acción quedará registrada.")) return;
+  await serverOperation(group,"restart");
+}
+
+async function showServiceRun(id){
+  selectedServiceRunId=id;
+  await refreshServiceRun(id);
+}
+
+async function refreshServiceRun(id){
+  const r=await fetch(`/api/automation/run/${id}`);
+  if(!r.ok)return;
+  const j=await r.json();
+  document.getElementById("srv-log-meta").textContent=`Run #${j.id} · ${j.label} · ${j.status} · RC ${j.return_code??"-"}`;
+  document.getElementById("srv-log").textContent=j.log_text||"Esperando salida...";
+}
+
+function updateServerRuns(){
+  const rows=state.automation_runs.filter(r =>
+    String(r.action||"").startsWith("server_") ||
+    String(r.action||"").startsWith("verify_")
+  );
+  table(document.getElementById("tbl-server-runs"),[
+    ["id","ID",v=>`<button class="btn" onclick="showServiceRun(${Number(v)})">#${Number(v)}</button>`],
+    ["started_at","Inicio",v=>fmtTime(v)],
+    ["label","Acción"],
+    ["target","Servidor"],
+    ["initiated_by","Operador"],
+    ["status","Estado",badge],
+    ["return_code","RC"]
+  ],rows);
+}
+
+function draw(canvas,vals,maxF=null,th=null){let c=canvas.getContext("2d"),W=canvas.width,H=canvas.height,L=60,R=20,T=20,B=35;c.clearRect(0,0,W,H);c.fillStyle="#0c1424";c.fillRect(0,0,W,H);let M=maxF??Math.max(1,...vals);c.strokeStyle="#26334f";c.fillStyle="#93a4c7";c.font="12px Segoe UI";for(let n=0;n<=5;n++){let y=T+(H-T-B)*n/5,v=M*(1-n/5);c.beginPath();c.moveTo(L,y);c.lineTo(W-R,y);c.stroke();c.fillText(v.toFixed(maxF?0:2),5,y+4)}if(th!==null){let y=T+(H-T-B)*(1-th/M);c.strokeStyle="#f39c12";c.setLineDash([7,6]);c.beginPath();c.moveTo(L,y);c.lineTo(W-R,y);c.stroke();c.setLineDash([])}if(!vals.length)return;c.strokeStyle="#5aa9ff";c.lineWidth=3;c.beginPath();vals.forEach((v,n)=>{let x=L+(W-L-R)*(vals.length===1?.5:n/(vals.length-1)),y=T+(H-T-B)*(1-Math.min(1,Math.max(0,v/M)));n?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}
+async function loadHistory(){let d=document.getElementById("sel-device").value,i=document.getElementById("sel-interface").value;if(!d||!i)return;let r=await fetch(`/api/history?device=${encodeURIComponent(d)}&interface=${encodeURIComponent(i)}`),h=await r.json();draw(document.getElementById("chart-util"),h.map(x=>Number(x.utilization_pct||0)),100,state?.threshold||70);draw(document.getElementById("chart-traffic"),h.map(x=>Number(x.traffic_bps||0)));let l=h[h.length-1];document.getElementById("tele-meta").textContent=l?`Muestras: ${h.length} · Utilización: ${Number(l.utilization_pct||0).toFixed(4)}% · Tráfico: ${fmtRate(l.traffic_bps)}`:"Sin muestras."}
+document.querySelectorAll(".tabbtn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tabbtn").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active")});
+document.getElementById("sel-device").onchange=()=>{selectors();loadHistory()};document.getElementById("sel-interface").onchange=loadHistory;document.getElementById("mit-device").onchange=mitSelectors;
+loadState();setInterval(loadState,5000);
+</script></body></html>
