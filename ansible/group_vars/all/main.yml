@@ -1,0 +1,23 @@
+---
+project_name: "NetDevOps Integrador"
+dns_domain: "netdevops.lab"
+dns_reverse_zone: "50.168.192.in-addr.arpa"
+
+web_fqdn: "www.{{ dns_domain }}"
+ftp_fqdn: "ftp.{{ dns_domain }}"
+mail_fqdn: "mail.{{ dns_domain }}"
+dns_fqdn: "dns.{{ dns_domain }}"
+
+ftp_virtual_users:
+  - name: ftpreader
+    access: read
+    password: "{{ vault_ftpreader_password }}"
+  - name: ftpwriter
+    access: write
+    password: "{{ vault_ftpwriter_password }}"
+
+mail_users:
+  - name: alice
+    password_hash: "{{ vault_mail_alice_password_hash }}"
+  - name: bob
+    password_hash: "{{ vault_mail_bob_password_hash }}"

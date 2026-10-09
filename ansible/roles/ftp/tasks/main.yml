@@ -1,0 +1,99 @@
+---
+- name: Install FTP dependencies
+  ansible.builtin.apt:
+    name:
+      - vsftpd
+      - db-util
+    state: present
+    update_cache: true
+
+- name: Create FTP guest account
+  ansible.builtin.user:
+    name: ftpvirtual
+    home: /srv/ftp
+    shell: /usr/sbin/nologin
+    create_home: false
+    system: true
+
+- name: Create FTP config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/vsftpd
+    - /etc/vsftpd_user_conf
+
+- name: Create virtual user directories
+  ansible.builtin.file:
+    path: "/srv/ftp/{{ item.name }}"
+    state: directory
+    owner: ftpvirtual
+    group: ftpvirtual
+    mode: "0755"
+  loop: "{{ ftp_virtual_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Deploy virtual users file
+  ansible.builtin.template:
+    src: virtual_users.txt.j2
+    dest: /etc/vsftpd/virtual_users.txt
+    owner: root
+    group: root
+    mode: "0600"
+  notify:
+    - Build virtual user database
+    - Restart vsftpd
+
+- name: Deploy PAM policy
+  ansible.builtin.template:
+    src: vsftpd.virtual.j2
+    dest: /etc/pam.d/vsftpd.virtual
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart vsftpd
+
+- name: Deploy vsftpd configuration
+  ansible.builtin.template:
+    src: vsftpd.conf.j2
+    dest: /etc/vsftpd.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart vsftpd
+
+- name: Deploy per-user policies
+  ansible.builtin.template:
+    src: user_policy.j2
+    dest: "/etc/vsftpd_user_conf/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ftp_virtual_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Restart vsftpd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start VSFTPD
+  ansible.builtin.service:
+    name: vsftpd
+    state: started
+    enabled: true
+
+- name: Allow FTP through UFW when active
+  ansible.builtin.shell: |
+    if ufw status | grep -q "^Status: active"; then
+      ufw allow 21/tcp
+      ufw allow 30000:30010/tcp
+    fi
+  register: ufw_ftp
+  changed_when: >
+    'Rule added' in ufw_ftp.stdout or
+    'Rules updated' in ufw_ftp.stdout

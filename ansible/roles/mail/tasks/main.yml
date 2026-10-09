@@ -1,0 +1,84 @@
+---
+- name: Set Postfix mailname
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/mailname
+    value: "{{ dns_domain }}"
+    vtype: string
+
+- name: Set Postfix type
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: "Internet Site"
+    vtype: select
+
+- name: Install Postfix and Dovecot
+  ansible.builtin.apt:
+    name:
+      - postfix
+      - dovecot-imapd
+    state: present
+    update_cache: true
+
+- name: Create mail users
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    password: "{{ item.password_hash }}"
+    shell: /bin/bash
+    create_home: true
+  loop: "{{ mail_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create Maildir folders
+  ansible.builtin.file:
+    path: "/home/{{ item.0.name }}/Maildir/{{ item.1 }}"
+    state: directory
+    owner: "{{ item.0.name }}"
+    group: "{{ item.0.name }}"
+    mode: "0700"
+  loop: "{{ mail_users | product(['cur','new','tmp']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }} -> {{ item.1 }}"
+
+- name: Deploy Postfix configuration
+  ansible.builtin.template:
+    src: main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart postfix
+
+- name: Deploy Dovecot override
+  ansible.builtin.template:
+    src: 99-netdevops.conf.j2
+    dest: /etc/dovecot/conf.d/99-netdevops.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart dovecot
+
+- name: Enable and start Postfix
+  ansible.builtin.service:
+    name: postfix
+    state: started
+    enabled: true
+
+- name: Enable and start Dovecot
+  ansible.builtin.service:
+    name: dovecot
+    state: started
+    enabled: true
+
+- name: Allow mail services through UFW when active
+  ansible.builtin.shell: |
+    if ufw status | grep -q "^Status: active"; then
+      ufw allow 25/tcp
+      ufw allow 143/tcp
+    fi
+  register: ufw_mail
+  changed_when: >
+    'Rule added' in ufw_mail.stdout or
+    'Rules updated' in ufw_mail.stdout

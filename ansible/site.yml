@@ -1,0 +1,44 @@
+---
+- name: Bootstrap privileged Python wrapper
+  hosts: linux_servers
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Ensure privileged Python wrapper exists
+      ansible.builtin.raw: |
+        printf '#!/bin/sh\nexec sudo -n /usr/bin/python3 "$@"\n' | sudo -n tee /usr/local/bin/ansible-python-root >/dev/null
+        sudo -n chmod 755 /usr/local/bin/ansible-python-root
+      changed_when: false
+
+- name: Configure WEB server
+  hosts: web
+  become: false
+  vars:
+    ansible_python_interpreter: /usr/local/bin/ansible-python-root
+  roles:
+    - web
+
+- name: Configure FTP server
+  hosts: ftp
+  become: false
+  vars:
+    ansible_python_interpreter: /usr/local/bin/ansible-python-root
+  roles:
+    - ftp
+
+- name: Configure MAIL server
+  hosts: mail
+  become: false
+  vars:
+    ansible_python_interpreter: /usr/local/bin/ansible-python-root
+  roles:
+    - mail
+
+- name: Configure DNS server
+  hosts: dns
+  become: false
+  vars:
+    ansible_python_interpreter: /usr/local/bin/ansible-python-root
+  roles:
+    - dns

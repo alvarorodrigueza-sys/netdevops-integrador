@@ -1,0 +1,7 @@
+{% if item.access == 'write' %}
+write_enable=YES
+download_enable=YES
+{% else %}
+write_enable=NO
+download_enable=YES
+{% endif %}
