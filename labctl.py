@@ -8,6 +8,7 @@ import socket
 import threading
 import time
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 
 import paramiko
@@ -1084,6 +1085,81 @@ def cisco_hostname_value(device):
     return None
 
 
+
+def cisco_system_values(device):
+    """Read IOS-XE version and boot time using Cisco operational YANG."""
+    filter_xml = """
+<device-hardware-data xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-device-hardware-oper">
+  <device-hardware>
+    <device-system-data/>
+  </device-hardware>
+</device-hardware-data>
+""".strip()
+
+    xml_text = netconf_get_xml(device, filter_xml)
+    root = ET.fromstring(xml_text)
+
+    values = {}
+    wanted = {
+        "software-version",
+        "current-time",
+        "boot-time",
+        "rommon-version",
+        "last-reboot-reason",
+    }
+
+    for element in root.iter():
+        local = _local_name(element.tag)
+        if local in wanted and element.text:
+            values[local] = element.text.strip()
+
+    software_version = values.get("software-version")
+    version = None
+    if software_version:
+        match = re.search(
+            r"\bVersion\s+([0-9A-Za-z._()\-]+)",
+            software_version,
+            re.IGNORECASE,
+        )
+        version = match.group(1) if match else software_version.splitlines()[0]
+
+    current_time = values.get("current-time")
+    boot_time = values.get("boot-time")
+    uptime_seconds = None
+    uptime = None
+
+    try:
+        if current_time and boot_time:
+            current_dt = datetime.fromisoformat(
+                current_time.replace("Z", "+00:00")
+            )
+            boot_dt = datetime.fromisoformat(
+                boot_time.replace("Z", "+00:00")
+            )
+            uptime_seconds = max(
+                0,
+                int((current_dt - boot_dt).total_seconds()),
+            )
+            days, rem = divmod(uptime_seconds, 86400)
+            hours, rem = divmod(rem, 3600)
+            minutes = rem // 60
+            uptime = f"{days}d {hours}h {minutes}m"
+    except (TypeError, ValueError):
+        uptime_seconds = None
+        uptime = None
+
+    return {
+        "version": version,
+        "software_version": software_version,
+        "current_time": current_time,
+        "boot_time": boot_time,
+        "uptime_seconds": uptime_seconds,
+        "uptime": uptime,
+        "rommon_version": values.get("rommon-version"),
+        "reboot_reason": values.get("last-reboot-reason"),
+    }
+
+
 def cisco_interfaces_values(device):
     filter_xml = """
 <interfaces-state xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
@@ -1255,6 +1331,7 @@ def normalized_snapshot(name, device, *, active_only=False):
 
     if driver == "netconf":
         interfaces = cisco_interfaces_values(device)
+        system = cisco_system_values(device)
         if active_only:
             interfaces = [i for i in interfaces if i.get("oper_status") == "up"]
         data = {
@@ -1264,6 +1341,7 @@ def normalized_snapshot(name, device, *, active_only=False):
             "vendor": "cisco",
             "host": device.get("host"),
             "hostname": cisco_hostname_value(device),
+            **system,
             "interfaces": interfaces,
         }
         return data

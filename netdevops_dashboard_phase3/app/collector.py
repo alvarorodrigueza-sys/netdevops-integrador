@@ -76,20 +76,40 @@ def get_snapshot(device: str) -> dict:
     return parse_snapshot_output(result.stdout)
 
 
+
+def ensure_device_system_columns(con):
+    """Migrate an existing database without deleting telemetry."""
+    columns = {
+        row["name"]
+        for row in con.execute("PRAGMA table_info(devices)").fetchall()
+    }
+
+    if "boot_time" not in columns:
+        con.execute("ALTER TABLE devices ADD COLUMN boot_time TEXT")
+
+    if "uptime_seconds" not in columns:
+        con.execute("ALTER TABLE devices ADD COLUMN uptime_seconds INTEGER")
+
+
 def upsert_device(con, snap, now):
+    ensure_device_system_columns(con)
+
     con.execute(
         """
         INSERT INTO devices(
             device, vendor, host, hostname, model,
-            version, last_seen, status
+            version, boot_time, uptime_seconds,
+            last_seen, status
         )
-        VALUES(?,?,?,?,?,?,?,?)
+        VALUES(?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(device) DO UPDATE SET
             vendor=excluded.vendor,
             host=excluded.host,
             hostname=excluded.hostname,
             model=excluded.model,
             version=excluded.version,
+            boot_time=excluded.boot_time,
+            uptime_seconds=excluded.uptime_seconds,
             last_seen=excluded.last_seen,
             status=excluded.status
         """,
@@ -100,6 +120,8 @@ def upsert_device(con, snap, now):
             snap.get("hostname"),
             snap.get("model"),
             snap.get("version"),
+            snap.get("boot_time"),
+            snap.get("uptime_seconds"),
             now,
             "online",
         ),
