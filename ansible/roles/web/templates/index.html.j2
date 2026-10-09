@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>{{ project_name }}</title></head>
+<body>
+  <h1>{{ project_name }}</h1>
+  <p>Servidor Web aprovisionado automáticamente mediante Ansible.</p>
+  <ul>
+    <li>Host: {{ inventory_hostname }}</li>
+    <li>IP: {{ ansible_host }}</li>
+    <li>FQDN: {{ web_fqdn }}</li>
+    <li>Servicio: NGINX</li>
+  </ul>
+</body>
+</html>

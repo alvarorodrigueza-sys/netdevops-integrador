@@ -1,0 +1,10 @@
+$TTL 86400
+@ IN SOA dns.{{ dns_domain }}. admin.{{ dns_domain }}. (
+  2026100701 3600 1800 604800 86400
+)
+@ IN NS dns.{{ dns_domain }}.
+
+{{ hostvars['dns01']['ansible_host'].split('.')[-1] }}  IN PTR dns.{{ dns_domain }}.
+{{ hostvars['web01']['ansible_host'].split('.')[-1] }}  IN PTR www.{{ dns_domain }}.
+{{ hostvars['ftp01']['ansible_host'].split('.')[-1] }}  IN PTR ftp.{{ dns_domain }}.
+{{ hostvars['mail01']['ansible_host'].split('.')[-1] }} IN PTR mail.{{ dns_domain }}.

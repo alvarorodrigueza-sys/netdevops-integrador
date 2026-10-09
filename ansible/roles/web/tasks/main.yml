@@ -1,0 +1,31 @@
+---
+- name: Install NGINX
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+- name: Deploy project page
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: /var/www/html/index.html
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Allow HTTP through UFW when active
+  ansible.builtin.shell: |
+    if ufw status | grep -q "^Status: active"; then
+      ufw allow 80/tcp
+    fi
+  register: ufw_http
+  changed_when: >
+    'Rule added' in ufw_http.stdout or
+    'Rules updated' in ufw_http.stdout
+
+- name: Enable and start NGINX
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

@@ -9,15 +9,29 @@ secrets.env
 *.db
 *.sqlite
 *.sqlite3
+netdevops_dashboard_phase3/data/
 
 logs/
 *.log
 
 *.bak
-*_BACKUP.py
-*_BACKUP.yaml
+*BACKUP*
+*backup*
 
 .vscode/
 .idea/
 
-netdevops_dashboard_phase3/data/*.db
+ansible/group_vars/vault.yml
+ansible/group_vars/all/vault.yml
+
+*.zip
+
+# Versiones intermedias/locales que no forman parte del entregable final
+netdevops_final_systeminfo_patch/
+netdevops_flask_dashboard_v2/
+netdevops_flask_dashboard_v3/
+netdevops_flask_dashboard_v4/
+netdevops_mitigation/
+
+labctl_netdevops_v4.py
+test_cisco_system_info.py

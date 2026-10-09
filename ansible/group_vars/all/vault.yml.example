@@ -1,0 +1,5 @@
+---
+vault_ftpreader_password: "CAMBIAR"
+vault_ftpwriter_password: "CAMBIAR"
+vault_mail_alice_password_hash: "$6$CAMBIAR"
+vault_mail_bob_password_hash: "$6$CAMBIAR"
