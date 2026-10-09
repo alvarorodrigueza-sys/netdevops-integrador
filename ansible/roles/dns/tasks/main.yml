@@ -1,0 +1,67 @@
+---
+- name: Install BIND9
+  ansible.builtin.apt:
+    name:
+      - bind9
+      - bind9-utils
+      - dnsutils
+    state: present
+    update_cache: true
+
+- name: Deploy named.conf.local
+  ansible.builtin.template:
+    src: named.conf.local.j2
+    dest: /etc/bind/named.conf.local
+    owner: root
+    group: bind
+    mode: "0644"
+  notify: Restart bind9
+
+- name: Deploy forward zone
+  ansible.builtin.template:
+    src: db.forward.j2
+    dest: "/etc/bind/db.{{ dns_domain }}"
+    owner: root
+    group: bind
+    mode: "0644"
+  notify: Restart bind9
+
+- name: Deploy reverse zone
+  ansible.builtin.template:
+    src: db.reverse.j2
+    dest: "/etc/bind/db.{{ dns_reverse_zone }}"
+    owner: root
+    group: bind
+    mode: "0644"
+  notify: Restart bind9
+
+- name: Validate BIND
+  ansible.builtin.command: named-checkconf
+  changed_when: false
+
+- name: Validate forward zone
+  ansible.builtin.command:
+    cmd: "named-checkzone {{ dns_domain }} /etc/bind/db.{{ dns_domain }}"
+  changed_when: false
+
+- name: Validate reverse zone
+  ansible.builtin.command:
+    cmd: "named-checkzone {{ dns_reverse_zone }} /etc/bind/db.{{ dns_reverse_zone }}"
+  changed_when: false
+
+- name: Enable and start BIND9
+  ansible.builtin.service:
+    name: bind9
+    state: started
+    enabled: true
+
+- name: Allow DNS through UFW when active
+  ansible.builtin.shell: |
+    if ufw status | grep -q "^Status: active"; then
+      ufw allow 53/udp
+      ufw allow 53/tcp
+    fi
+  register: ufw_dns
+  changed_when: >
+    'Rule added' in ufw_dns.stdout or
+    'Rules updated' in ufw_dns.stdout

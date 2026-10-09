@@ -1,0 +1,10 @@
+paramiko==5.0.0
+netmiko==4.8.0
+PyYAML==6.0.3
+requests==2.34.2
+python-dotenv==1.2.4
+paho-mqtt==2.1.0
+pyserial==3.5
+telnetlib3==5.0.1
+pysnmp==7.1.29
+ncclient==0.7.1

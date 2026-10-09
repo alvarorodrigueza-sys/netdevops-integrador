@@ -1,0 +1,122 @@
+---
+- name: Verify WEB service
+  hosts: web
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Verify NGINX from controller
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}/"
+        status_code: 200
+        return_content: true
+      delegate_to: localhost
+      register: web_result
+
+    - name: Validate NetDevOps page
+      ansible.builtin.assert:
+        that:
+          - "'NetDevOps' in web_result.content"
+        success_msg: "WEB OK - NGINX responde correctamente"
+
+
+- name: Verify FTP service
+  hosts: ftp
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Verify FTP port 21
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 21
+        timeout: 10
+      delegate_to: localhost
+
+    - name: FTP result
+      ansible.builtin.debug:
+        msg: "FTP OK - VSFTPD TCP/21 accesible"
+
+
+- name: Verify MAIL service
+  hosts: mail
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Verify SMTP port 25
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 25
+        timeout: 10
+      delegate_to: localhost
+
+    - name: Verify IMAP port 143
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 143
+        timeout: 10
+      delegate_to: localhost
+
+    - name: MAIL result
+      ansible.builtin.debug:
+        msg: "MAIL OK - Postfix SMTP/25 y Dovecot IMAP/143 accesibles"
+
+
+- name: Verify DNS service
+  hosts: dns
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Resolve WEB record with BIND9
+      ansible.builtin.command:
+        cmd: "dig @{{ ansible_host }} +short www.{{ dns_domain }}"
+      delegate_to: localhost
+      register: dns_web
+      changed_when: false
+
+    - name: Validate WEB DNS record
+      ansible.builtin.assert:
+        that:
+          - "hostvars['web01']['ansible_host'] in dns_web.stdout"
+        success_msg: "DNS OK - www.{{ dns_domain }} resuelve correctamente"
+
+    - name: Resolve FTP record with BIND9
+      ansible.builtin.command:
+        cmd: "dig @{{ ansible_host }} +short ftp.{{ dns_domain }}"
+      delegate_to: localhost
+      register: dns_ftp
+      changed_when: false
+
+    - name: Validate FTP DNS record
+      ansible.builtin.assert:
+        that:
+          - "hostvars['ftp01']['ansible_host'] in dns_ftp.stdout"
+        success_msg: "DNS OK - ftp.{{ dns_domain }} resuelve correctamente"
+
+    - name: Resolve MAIL record with BIND9
+      ansible.builtin.command:
+        cmd: "dig @{{ ansible_host }} +short mail.{{ dns_domain }}"
+      delegate_to: localhost
+      register: dns_mail
+      changed_when: false
+
+    - name: Validate MAIL DNS record
+      ansible.builtin.assert:
+        that:
+          - "hostvars['mail01']['ansible_host'] in dns_mail.stdout"
+        success_msg: "DNS OK - mail.{{ dns_domain }} resuelve correctamente"
+
+    - name: Verify MX record
+      ansible.builtin.command:
+        cmd: "dig @{{ ansible_host }} +short MX {{ dns_domain }}"
+      delegate_to: localhost
+      register: dns_mx
+      changed_when: false
+
+    - name: Validate MX record
+      ansible.builtin.assert:
+        that:
+          - "'mail.{{ dns_domain }}.' in dns_mx.stdout"
+        success_msg: "DNS OK - registro MX apunta al servidor de correo"
